@@ -1,0 +1,43 @@
+#!/bin/sh
+# AT-SignBridge control: enable/disable the Wine-hosted bank signer for all browsers.
+APP="@APP@"
+HOST="mk.asseco_see.aseba_crypto_signer"
+export WINEPREFIX="$APP/wineprefix" WINEDEBUG=-all
+
+manifests() {
+  for f in "$HOME"/.config/*/NativeMessagingHosts/$HOST.json* \
+           "$HOME"/.config/BraveSoftware/*/NativeMessagingHosts/$HOST.json* \
+           "$HOME"/.mozilla/native-messaging-hosts/${HOST}_v2.ff.json*; do
+    [ -f "$f" ] && grep -q "$APP/run.sh" "$f" && echo "$f"
+  done
+}
+
+case "${1:-status}" in
+  on)
+    manifests | while read -r f; do case "$f" in *.disabled) mv "$f" "${f%.disabled}" ;; esac; done
+    echo "AT-SignBridge: ON" ;;
+  off)
+    manifests | while read -r f; do case "$f" in *.json) mv "$f" "$f.disabled" ;; esac; done
+    wineserver -k 2>/dev/null
+    echo "AT-SignBridge: OFF" ;;
+  status)
+    if manifests | grep -q '\.json$'; then echo "AT-SignBridge: ON"; else echo "AT-SignBridge: OFF"; fi
+    manifests | sed 's#^#  #'
+    if command -v pkcs11-tool >/dev/null; then
+      label="$(pkcs11-tool -L 2>/dev/null | sed -n 's/.*token label *: *//p' | head -1)"
+      [ -n "$label" ] && echo "Token: $label" || echo "Token: not detected"
+    fi ;;
+  test)
+    python3 -I -c 'import json,struct,sys; d=json.dumps({"type":"VERSION","nonce":"test"}).encode(); sys.stdout.buffer.write(struct.pack("<I",len(d))+d)' \
+      | timeout 60 "$APP/run.sh" chrome-extension://test/ | tail -c +5; echo ;;
+  log)
+    tail -n "${2:-30}" "$APP/relay.log" ;;
+  uninstall)
+    manifests | while read -r f; do rm -f "$f"; done
+    wineserver -k 2>/dev/null
+    rm -rf "$APP"
+    rm -f "$0"
+    echo "AT-SignBridge removed (system packages like wine/pcscd were left installed)." ;;
+  *)
+    echo "usage: at-signbridge [status|on|off|test|log [N]|uninstall]"; exit 1 ;;
+esac

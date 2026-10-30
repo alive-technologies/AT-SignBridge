@@ -1,0 +1,13 @@
+# Never commit bank/vendor binaries, logs or Wine prefixes (they can contain certificates and personal data)
+*.msi
+*.exe
+*.dll
+*.log
+*.pem
+*.der
+*.cer
+*.crt
+*.p12
+*.pfx
+wineprefix/
+signer/
